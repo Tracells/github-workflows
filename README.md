@@ -45,9 +45,39 @@ jobs:
 
 - `TRACELLS_SKIP_DB_INIT` (optional): Skip database initialization for tests
 
-## PR Review Workflow
+### PR Review Workflow
 
-Already available at `Tracells/pr-review-agents/.github/workflows/review.yml`
+**File:** `.github/workflows/pr-review.yml`
+
+Runs AI-powered PR review using AWS Bedrock and the pr-review-agents repository.
+
+**Usage:**
+
+```yaml
+name: AI PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  review:
+    if: github.event.pull_request.head.repo.full_name == github.repository && !github.event.pull_request.draft
+    uses: Tracells/github-workflows/.github/workflows/pr-review.yml@v1
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_PR_REVIEW_ROLE_ARN }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+```
+
+**Secrets:**
+
+- `AWS_ROLE_ARN` (optional): AWS IAM role ARN for Bedrock access
+- `AWS_REGION` (optional, default: `us-east-1`): AWS region
 
 ## Setup Instructions
 
