@@ -79,6 +79,39 @@ jobs:
 - `AWS_ROLE_ARN` (optional): AWS IAM role ARN for Bedrock access
 - `AWS_REGION` (optional, default: `us-east-1`): AWS region
 
+## Using Test Workflow in Deployment Pipelines
+
+You can call the Python test workflow as a job within your deployment workflow to avoid duplicating test code:
+
+```yaml
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    name: Run Tests
+    uses: Tracells/github-workflows/.github/workflows/python-test.yml@v1.0.0
+    with:
+      python-version: '3.11'
+      coverage-package: 'your_package'
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      # Your deployment steps here
+      - name: Deploy
+        run: echo "Deploy after tests pass"
+```
+
+This pattern:
+- Eliminates test code duplication between test.yml and deploy.yml
+- Ensures consistent testing across workflows
+- Updates automatically when the centralized workflow is updated
+
 ## Setup Instructions
 
 1. **Create this repository** on GitHub (e.g., `Tracells/github-workflows` or `your-org/github-workflows`)
