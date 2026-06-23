@@ -79,6 +79,74 @@ jobs:
 - `AWS_ROLE_ARN` (optional): AWS IAM role ARN for Bedrock access
 - `AWS_REGION` (optional, default: `us-east-1`): AWS region
 
+### CDK Deploy Workflow
+
+**File:** `.github/workflows/cdk-deploy.yml`
+
+Deploys AWS CDK infrastructure with support for both OIDC and access key authentication.
+
+**Usage (OIDC authentication):**
+
+```yaml
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    name: Run Tests
+    uses: Tracells/github-workflows/.github/workflows/python-test.yml@v1.0.0
+    with:
+      python-version: '3.11'
+      coverage-package: 'your_package'
+
+  deploy:
+    needs: test
+    uses: Tracells/github-workflows/.github/workflows/cdk-deploy.yml@v1
+    with:
+      use-oidc: true
+      aws-region: 'us-east-2'
+      infra-path: 'infra'
+    secrets:
+      AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+```
+
+**Usage (Access keys with environment variables):**
+
+```yaml
+deploy:
+  needs: test
+  uses: Tracells/github-workflows/.github/workflows/cdk-deploy.yml@v1
+  with:
+    use-oidc: false
+    stack-name: 'MyStackName'
+    install-global-cdk: true
+  secrets:
+    AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    DB_HOST: ${{ secrets.DB_HOST }}
+    DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+```
+
+**Inputs:**
+
+- `node-version` (optional, default: `'20'`): Node.js version
+- `python-version` (optional, default: `'3.11'`): Python version
+- `aws-region` (optional, default: `'us-east-2'`): AWS region
+- `infra-path` (optional, default: `'infra'`): Path to CDK infrastructure directory
+- `stack-name` (optional): CDK stack name (leave empty to deploy all stacks)
+- `use-oidc` (optional, default: `false`): Use OIDC authentication vs access keys
+- `install-global-cdk` (optional, default: `false`): Install AWS CDK CLI globally
+
+**Secrets:**
+
+- `AWS_ACCESS_KEY_ID` (required if `use-oidc: false`)
+- `AWS_SECRET_ACCESS_KEY` (required if `use-oidc: false`)
+- `AWS_DEPLOY_ROLE_ARN` (required if `use-oidc: true`)
+- Environment secrets: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `REPORT_RECIPIENTS`, `SES_FROM_EMAIL` (all optional)
+
 ## Using Test Workflow in Deployment Pipelines
 
 You can call the Python test workflow as a job within your deployment workflow to avoid duplicating test code:

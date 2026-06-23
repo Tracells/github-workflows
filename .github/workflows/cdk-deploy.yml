@@ -1,0 +1,156 @@
+name: CDK Deploy (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: 'Node.js version'
+        required: false
+        type: string
+        default: '20'
+      python-version:
+        description: 'Python version'
+        required: false
+        type: string
+        default: '3.11'
+      aws-region:
+        description: 'AWS region'
+        required: false
+        type: string
+        default: 'us-east-2'
+      infra-path:
+        description: 'Path to CDK infrastructure directory'
+        required: false
+        type: string
+        default: 'infra'
+      stack-name:
+        description: 'CDK stack name to deploy (leave empty to deploy all stacks)'
+        required: false
+        type: string
+        default: ''
+      use-oidc:
+        description: 'Use OIDC authentication (true) or access keys (false)'
+        required: false
+        type: boolean
+        default: false
+      install-global-cdk:
+        description: 'Install AWS CDK CLI globally'
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        description: 'AWS Access Key ID (required if use-oidc is false)'
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        description: 'AWS Secret Access Key (required if use-oidc is false)'
+        required: false
+      AWS_DEPLOY_ROLE_ARN:
+        description: 'AWS IAM Role ARN for OIDC (required if use-oidc is true)'
+        required: false
+      # Environment variables that may be needed by CDK
+      DB_HOST:
+        required: false
+      DB_PORT:
+        required: false
+      DB_NAME:
+        required: false
+      DB_USER:
+        required: false
+      DB_PASSWORD:
+        required: false
+      REPORT_RECIPIENTS:
+        required: false
+      SES_FROM_EMAIL:
+        required: false
+
+jobs:
+  deploy:
+    name: Deploy to AWS
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'npm'
+          cache-dependency-path: ${{ inputs.infra-path }}/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Configure AWS credentials (OIDC)
+        if: inputs.use-oidc == true
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Configure AWS credentials (Access Keys)
+        if: inputs.use-oidc == false
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Install AWS CDK CLI globally
+        if: inputs.install-global-cdk == true
+        run: npm install -g aws-cdk
+
+      - name: Install CDK dependencies
+        working-directory: ${{ inputs.infra-path }}
+        run: npm ci
+
+      - name: Build CDK
+        working-directory: ${{ inputs.infra-path }}
+        run: npm run build
+
+      - name: Deploy CDK stack (specific stack)
+        if: inputs.stack-name != ''
+        working-directory: ${{ inputs.infra-path }}
+        run: |
+          cdk deploy ${{ inputs.stack-name }} \
+            --require-approval never \
+            --verbose
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          REPORT_RECIPIENTS: ${{ secrets.REPORT_RECIPIENTS }}
+          SES_FROM_EMAIL: ${{ secrets.SES_FROM_EMAIL }}
+
+      - name: Deploy CDK stacks (all stacks)
+        if: inputs.stack-name == ''
+        working-directory: ${{ inputs.infra-path }}
+        run: |
+          npx cdk deploy --all --require-approval never
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          REPORT_RECIPIENTS: ${{ secrets.REPORT_RECIPIENTS }}
+          SES_FROM_EMAIL: ${{ secrets.SES_FROM_EMAIL }}
+
+      - name: Deployment Summary
+        if: success()
+        run: |
+          echo "✅ Successfully deployed CDK stack(s) to AWS"
+          echo "Region: ${{ inputs.aws-region }}"
+          echo "Stack: ${{ inputs.stack-name || 'all stacks' }}"
+          echo "Deployment triggered by: ${{ github.actor }}"
+          echo "Commit: ${{ github.sha }}"
