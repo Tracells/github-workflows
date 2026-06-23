@@ -85,8 +85,9 @@ jobs:
           fi
 
           # Run extra install commands if provided
-          if [ -n "${{ inputs.extra-install-commands }}" ]; then
-            ${{ inputs.extra-install-commands }}
+          EXTRA_COMMANDS="${{ inputs.extra-install-commands }}"
+          if [ -n "$EXTRA_COMMANDS" ]; then
+            $EXTRA_COMMANDS
           fi
 
       - name: Run tests with coverage
