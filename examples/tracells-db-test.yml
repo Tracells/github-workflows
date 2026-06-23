@@ -1,0 +1,17 @@
+name: Run Tests
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  test:
+    uses: Tracells/github-workflows/.github/workflows/python-test.yml@main
+    with:
+      python-version: '3.11'
+      coverage-package: 'src.db'
+      install-editable: true
+      concurrency-enabled: true
+    secrets:
+      TRACELLS_SKIP_DB_INIT: '1'

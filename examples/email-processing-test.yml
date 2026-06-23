@@ -1,0 +1,15 @@
+name: Run Tests
+
+on:
+  push:
+    branches:
+      - '**'
+      - '!main'
+
+jobs:
+  test:
+    uses: Tracells/github-workflows/.github/workflows/python-test.yml@main
+    with:
+      python-version: '3.11'
+      coverage-package: 'email_parser'
+      concurrency-enabled: true

@@ -1,0 +1,17 @@
+name: Run Tests
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    uses: Tracells/github-workflows/.github/workflows/python-test.yml@main
+    with:
+      python-version: '3.11'
+      coverage-package: 'redcap'
+      skip-tracells-db: true

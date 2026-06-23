@@ -1,0 +1,104 @@
+name: Python Test (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: 'Python version to use'
+        required: false
+        type: string
+        default: '3.11'
+      test-path:
+        description: 'Path to tests directory'
+        required: false
+        type: string
+        default: 'tests/'
+      coverage-package:
+        description: 'Package name for coverage reporting'
+        required: true
+        type: string
+      install-editable:
+        description: 'Install package in editable mode (pip install -e .)'
+        required: false
+        type: boolean
+        default: false
+      skip-tracells-db:
+        description: 'Skip tracells-db dependency (for repos that depend on it)'
+        required: false
+        type: boolean
+        default: false
+      extra-install-commands:
+        description: 'Extra commands to run during dependency installation'
+        required: false
+        type: string
+        default: ''
+      concurrency-enabled:
+        description: 'Enable concurrency cancellation'
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      TRACELLS_SKIP_DB_INIT:
+        description: 'Skip database initialization for tests'
+        required: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ inputs.concurrency-enabled && format('{0}-{1}', github.workflow, github.event.pull_request.number || github.ref) || '' }}
+      cancel-in-progress: ${{ inputs.concurrency-enabled }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov
+
+          # Handle tracells-db exclusion for repos that depend on it
+          if [ -f requirements.txt ]; then
+            if [ "${{ inputs.skip-tracells-db }}" = "true" ]; then
+              grep -v "tracells-db" requirements.txt > requirements-test.txt || true
+              if [ -s requirements-test.txt ]; then
+                pip install -r requirements-test.txt
+              fi
+            else
+              pip install -r requirements.txt
+            fi
+          fi
+
+          if [ -f requirements-dev.txt ]; then
+            pip install -r requirements-dev.txt
+          fi
+
+          # Install package in editable mode if requested
+          if [ "${{ inputs.install-editable }}" = "true" ]; then
+            pip install -e .
+          fi
+
+          # Run extra install commands if provided
+          if [ -n "${{ inputs.extra-install-commands }}" ]; then
+            ${{ inputs.extra-install-commands }}
+          fi
+
+      - name: Run tests with coverage
+        env:
+          TRACELLS_SKIP_DB_INIT: ${{ secrets.TRACELLS_SKIP_DB_INIT }}
+        run: |
+          PYTHONPATH=. pytest ${{ inputs.test-path }} -v --cov=${{ inputs.coverage-package }} --cov-report=term-missing --cov-report=html
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+          retention-days: 30
