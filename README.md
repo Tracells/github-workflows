@@ -49,7 +49,10 @@ jobs:
 
 **File:** `.github/workflows/pr-review.yml`
 
-Runs AI-powered PR review using AWS Bedrock and the pr-review-agents repository.
+Runs AI-powered PR review using AWS Bedrock with multiple specialized senior engineer agents:
+- **Architecture Reviewer** - System design, module boundaries, API design, maintainability
+- **Reliability Reviewer** - Correctness, edge cases, error handling, observability
+- **Security Reviewer** - Auth/authz, secrets, input validation, data leakage
 
 **Usage:**
 
@@ -74,9 +77,33 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
 ```
 
+**Configuration (Optional):**
+
+Create `.github/pr-review.yml` in your repository to customize:
+
+```yaml
+# Enable/disable specific reviewers
+reviewers:
+  architecture: true
+  reliability: true
+  security: true
+
+# Minimum severity to report (low, medium, high)
+min_severity: medium
+
+# File patterns to exclude
+exclude_patterns:
+  - "**/*.test.js"
+  - "**/*.spec.ts"
+  - "**/fixtures/**"
+
+# Maximum PR size (files changed) before skipping review
+max_pr_size: 50
+```
+
 **Secrets:**
 
-- `AWS_ROLE_ARN` (optional): AWS IAM role ARN for Bedrock access
+- `AWS_ROLE_ARN` (required): AWS IAM role ARN for Bedrock access
 - `AWS_REGION` (optional, default: `us-east-1`): AWS region
 
 ### CDK Deploy Workflow

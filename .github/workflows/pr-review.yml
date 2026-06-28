@@ -19,11 +19,11 @@ jobs:
     if: github.event.pull_request.draft == false
 
     steps:
-      - name: Checkout pr-review-agents
+      - name: Checkout github-workflows
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/pr-review-agents
-          path: pr-review-agents
+          repository: ${{ github.repository_owner }}/github-workflows
+          path: github-workflows
 
       - name: Checkout target repository
         uses: actions/checkout@v4
@@ -45,11 +45,11 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        working-directory: pr-review-agents
+        working-directory: github-workflows
         run: npm install
 
       - name: Run PR review
-        working-directory: pr-review-agents
+        working-directory: github-workflows
         env:
           AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -59,4 +59,4 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           TARGET_REPO_PATH: ${{ github.workspace }}/target-repo
-        run: node src/index.js
+        run: node src/auto-pr-review/index.js
