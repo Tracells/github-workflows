@@ -121,6 +121,10 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+  id-token: write  # Required for OIDC authentication
+
 jobs:
   test:
     name: Run Tests
@@ -143,18 +147,22 @@ jobs:
 **Usage (Access keys with environment variables):**
 
 ```yaml
-deploy:
-  needs: test
-  uses: Tracells/github-workflows/.github/workflows/cdk-deploy.yml@v1
-  with:
-    use-oidc: false
-    stack-name: 'MyStackName'
-    install-global-cdk: true
-  secrets:
-    AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-    AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    DB_HOST: ${{ secrets.DB_HOST }}
-    DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+permissions:
+  contents: read  # Required to checkout code
+
+jobs:
+  deploy:
+    needs: test
+    uses: Tracells/github-workflows/.github/workflows/cdk-deploy.yml@v1
+    with:
+      use-oidc: false
+      stack-name: 'YourStackName'
+      install-global-cdk: true
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
 ```
 
 **Inputs:**
