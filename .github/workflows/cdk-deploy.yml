@@ -81,8 +81,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
-          cache: 'npm'
-          cache-dependency-path: ${{ inputs.infra-path }}/package-lock.json
 
       - name: Set up Python
         uses: actions/setup-python@v5
