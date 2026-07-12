@@ -20,7 +20,7 @@ jobs:
   # NEW: Add infrastructure validation
   validate:
     name: Validate Infrastructure
-    uses: Tracells/github-workflows/.github/workflows/pre-merge-validation.yml@main
+    uses: Tracells/github-workflows/.github/workflows/pre-deploy-validation.yml@main
     with:
       node-version: '20'
       python-version: '3.12'
