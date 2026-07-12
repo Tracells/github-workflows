@@ -4,11 +4,11 @@ This repository contains centralized, reusable GitHub Actions workflows used acr
 
 ## Available Workflows
 
-### Pre-Merge Validation Workflow
+### Pre-Deployment Validation Workflow
 
 **File:** `.github/workflows/pre-merge-validation.yml`
 
-**NEW** - Validates CDK deployments and Lambda packages **before merging** to catch deployment failures early.
+**NEW** - Validates CDK deployments and Lambda packages **before deploying** to catch deployment failures early.
 
 **What it validates:**
 - ✅ CDK changeset validation (validates resources exist, IAM permissions, template syntax)
