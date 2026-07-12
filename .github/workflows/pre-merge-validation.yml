@@ -288,23 +288,3 @@ jobs:
           echo ""
           echo "This PR is safe to merge from an infrastructure perspective."
           echo "Changesets have been cleaned up (no resources were created)."
-
-      - name: Validation Failed
-        if: failure()
-        run: |
-          echo "================================================"
-          echo "❌ Pre-Deployment Validation FAILED"
-          echo "================================================"
-          echo ""
-          echo "One or more validation steps failed."
-          echo "Please review the logs above for details."
-          echo ""
-          echo "Common issues:"
-          echo "  - Referenced AWS resources don't exist (ECR images, S3 buckets)"
-          echo "  - Secrets Manager secrets not populated"
-          echo "  - Invalid CloudFormation template"
-          echo "  - Lambda package dependencies missing or conflicting"
-          echo "  - Lambda package size exceeds limits"
-          echo ""
-          echo "Fix the issues and push a new commit to re-run validation."
-          exit 1
