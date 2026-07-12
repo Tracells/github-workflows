@@ -12,3 +12,6 @@
 .pytest_cache/
 htmlcov/
 .coverage
+
+# Git worktrees
+.worktrees/
