@@ -2,6 +2,7 @@
 # Add/remove repos from this list as they adopt or stop using workflows from this repo
 
 repos:
+  - ai-tools-infra
   - labguru-delivery-validation
   - pipeline-automations
   - tracells-db

@@ -6,7 +6,7 @@ This repository contains centralized, reusable GitHub Actions workflows used acr
 
 ### Pre-Deployment Validation Workflow
 
-**File:** `.github/workflows/pre-merge-validation.yml`
+**File:** `.github/workflows/pre-deploy-validation.yml`
 
 **NEW** - Validates CDK deployments and Lambda packages **before deploying** to catch deployment failures early.
 
@@ -32,7 +32,7 @@ jobs:
       coverage-package: 'your_package'
 
   validate:
-    uses: Tracells/github-workflows/.github/workflows/pre-merge-validation.yml@main
+    uses: Tracells/github-workflows/.github/workflows/pre-deploy-validation.yml@main
     with:
       aws-region: us-east-2
       infra-path: infra
@@ -49,7 +49,7 @@ jobs:
 - `skip-lambda-build` (optional, default: `false`): Skip Lambda validation
 - `use-oidc` (optional, default: `false`): Use OIDC authentication
 
-**See:** [docs/pre-merge-validation.md](docs/pre-merge-validation.md) for full documentation
+**See:** [docs/pre-deploy-validation.md](docs/pre-deploy-validation.md) for full documentation
 
 ### Python Test Workflow
 
