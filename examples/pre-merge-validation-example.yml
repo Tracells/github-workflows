@@ -1,0 +1,40 @@
+# Example: Pre-Merge Validation Workflow
+# Copy this to your repository as .github/workflows/pr-checks.yml
+
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Run your existing tests
+  test:
+    name: Run Tests
+    uses: Tracells/github-workflows/.github/workflows/python-test.yml@main
+    with:
+      python-version: '3.12'
+      test-path: '.'
+      coverage-package: 'your_package'
+
+  # NEW: Add infrastructure validation
+  validate:
+    name: Validate Infrastructure
+    uses: Tracells/github-workflows/.github/workflows/pre-merge-validation.yml@main
+    with:
+      node-version: '20'
+      python-version: '3.12'
+      aws-region: us-east-2
+      infra-path: infra
+      stack-name: YourStackName
+      lambda-paths: 'src/lambda1,src/lambda2'  # Comma-separated, or empty if no Lambda
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      REPORT_RECIPIENTS: ${{ secrets.REPORT_RECIPIENTS }}
+      SES_FROM_EMAIL: ${{ secrets.SES_FROM_EMAIL }}
