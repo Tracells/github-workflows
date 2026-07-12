@@ -1,7 +1,7 @@
-# Example: Pre-Merge Validation Workflow
-# Copy this to your repository as .github/workflows/pr-checks.yml
+# Example: Pre-Deployment Validation Workflow
+# Copy this to your repository as .github/workflows/pre-deployment-validation.yml
 
-name: PR Checks
+name: Pre-Deployment Validation
 
 on:
   pull_request:

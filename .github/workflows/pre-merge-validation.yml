@@ -1,4 +1,4 @@
-name: Pre-Merge Validation (Reusable)
+name: Pre-Deployment Validation (Reusable)
 
 on:
   workflow_call:
@@ -71,7 +71,7 @@ on:
 
 jobs:
   validate:
-    name: Pre-Merge Validation
+    name: Pre-Deployment Validation
     runs-on: ubuntu-latest
 
     permissions:
@@ -274,7 +274,7 @@ jobs:
         if: success()
         run: |
           echo "================================================"
-          echo "✅ Pre-Merge Validation PASSED"
+          echo "✅ Pre-Deployment Validation PASSED"
           echo "================================================"
           echo ""
           echo "Validations completed:"
@@ -293,7 +293,7 @@ jobs:
         if: failure()
         run: |
           echo "================================================"
-          echo "❌ Pre-Merge Validation FAILED"
+          echo "❌ Pre-Deployment Validation FAILED"
           echo "================================================"
           echo ""
           echo "One or more validation steps failed."
