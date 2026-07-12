@@ -1,0 +1,8 @@
+# Repositories using github-workflows
+# Add/remove repos from this list as they adopt or stop using workflows from this repo
+
+repos:
+  - labguru-delivery-validation
+  - pipeline-automations
+  - tracells-db
+  - redcap

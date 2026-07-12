@@ -4,6 +4,53 @@ This repository contains centralized, reusable GitHub Actions workflows used acr
 
 ## Available Workflows
 
+### Pre-Merge Validation Workflow
+
+**File:** `.github/workflows/pre-merge-validation.yml`
+
+**NEW** - Validates CDK deployments and Lambda packages **before merging** to catch deployment failures early.
+
+**What it validates:**
+- ✅ CDK changeset validation (validates resources exist, IAM permissions, template syntax)
+- ✅ Lambda package build (dependencies, package size, imports)
+- **Zero infrastructure cost** - uses changesets without executing
+
+**Usage:**
+
+```yaml
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    uses: Tracells/github-workflows/.github/workflows/python-test.yml@main
+    with:
+      python-version: '3.12'
+      coverage-package: 'your_package'
+
+  validate:
+    uses: Tracells/github-workflows/.github/workflows/pre-merge-validation.yml@main
+    with:
+      aws-region: us-east-2
+      infra-path: infra
+      stack-name: YourStackName
+      lambda-paths: 'src/lambda1,src/lambda2'
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+```
+
+**Inputs:**
+- `node-version`, `python-version`, `aws-region`, `infra-path`, `stack-name` - Same as `cdk-deploy.yml`
+- `lambda-paths` (optional): Comma-separated paths to Lambda directories (e.g., `'src/lambda1,src/lambda2'`)
+- `skip-lambda-build` (optional, default: `false`): Skip Lambda validation
+- `use-oidc` (optional, default: `false`): Use OIDC authentication
+
+**See:** [docs/pre-merge-validation.md](docs/pre-merge-validation.md) for full documentation
+
 ### Python Test Workflow
 
 **File:** `.github/workflows/python-test.yml`

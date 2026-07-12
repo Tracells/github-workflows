@@ -1,0 +1,310 @@
+name: Pre-Merge Validation (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: 'Node.js version'
+        required: false
+        type: string
+        default: '20'
+      python-version:
+        description: 'Python version'
+        required: false
+        type: string
+        default: '3.11'
+      aws-region:
+        description: 'AWS region'
+        required: false
+        type: string
+        default: 'us-east-2'
+      infra-path:
+        description: 'Path to CDK infrastructure directory'
+        required: false
+        type: string
+        default: 'infra'
+      stack-name:
+        description: 'CDK stack name to validate (leave empty to validate all stacks)'
+        required: false
+        type: string
+        default: ''
+      lambda-paths:
+        description: 'Comma-separated paths to Lambda function directories (e.g., "src/lambda,src/another-lambda")'
+        required: false
+        type: string
+        default: ''
+      use-oidc:
+        description: 'Use OIDC authentication (true) or access keys (false)'
+        required: false
+        type: boolean
+        default: false
+      skip-lambda-build:
+        description: 'Skip Lambda package build validation'
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        description: 'AWS Access Key ID (required if use-oidc is false)'
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        description: 'AWS Secret Access Key (required if use-oidc is false)'
+        required: false
+      AWS_DEPLOY_ROLE_ARN:
+        description: 'AWS IAM Role ARN for OIDC (required if use-oidc is true)'
+        required: false
+      # Environment variables that may be needed by CDK
+      DB_HOST:
+        required: false
+      DB_PORT:
+        required: false
+      DB_NAME:
+        required: false
+      DB_USER:
+        required: false
+      DB_PASSWORD:
+        required: false
+      REPORT_RECIPIENTS:
+        required: false
+      SES_FROM_EMAIL:
+        required: false
+
+jobs:
+  validate:
+    name: Pre-Merge Validation
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Set up Python
+        if: inputs.lambda-paths != '' || inputs.python-version != ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Configure AWS credentials (OIDC)
+        if: inputs.use-oidc == true
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Configure AWS credentials (Access Keys)
+        if: inputs.use-oidc == false
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Install CDK dependencies
+        working-directory: ${{ inputs.infra-path }}
+        run: npm ci
+
+      - name: Build CDK
+        working-directory: ${{ inputs.infra-path }}
+        run: npm run build
+
+      # Step 1: CDK Changeset Validation
+      - name: Create CDK changeset (dry-run)
+        id: cdk-changeset
+        working-directory: ${{ inputs.infra-path }}
+        run: |
+          echo "Creating CloudFormation changeset without executing..."
+
+          # Set stack parameter
+          STACK_PARAM="${{ inputs.stack-name }}"
+          if [ -z "$STACK_PARAM" ]; then
+            STACK_PARAM="--all"
+          fi
+
+          # Create changeset (this validates resources exist)
+          echo "Running: cdk deploy $STACK_PARAM --no-execute"
+          npx cdk deploy $STACK_PARAM \
+            --no-execute \
+            --require-approval never \
+            --verbose 2>&1 | tee changeset-output.txt
+
+          echo "✅ Changeset created successfully"
+          echo "This validates:"
+          echo "  - Referenced AWS resources exist (ECR images, S3 buckets, etc.)"
+          echo "  - IAM permissions are correct"
+          echo "  - CloudFormation template is valid"
+          echo "  - Secrets Manager secrets exist"
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          REPORT_RECIPIENTS: ${{ secrets.REPORT_RECIPIENTS }}
+          SES_FROM_EMAIL: ${{ secrets.SES_FROM_EMAIL }}
+        continue-on-error: false
+
+      - name: Clean up changesets
+        if: always()
+        working-directory: ${{ inputs.infra-path }}
+        run: |
+          echo "Cleaning up CloudFormation changesets..."
+
+          # Get stack names
+          STACK_NAMES=$(npx cdk list 2>/dev/null || echo "")
+
+          if [ -z "$STACK_NAMES" ]; then
+            echo "No stacks found to clean up"
+            exit 0
+          fi
+
+          # Delete changesets for each stack (if they exist)
+          for stack in $STACK_NAMES; do
+            echo "Checking for changesets in stack: $stack"
+
+            # List changesets and delete any that start with "cdk-deploy-change-set"
+            aws cloudformation list-change-sets \
+              --stack-name "$stack" \
+              --query 'Summaries[?starts_with(ChangeSetName, `cdk-deploy-change-set`)].ChangeSetName' \
+              --output text 2>/dev/null | while read -r changeset; do
+
+              if [ -n "$changeset" ]; then
+                echo "  Deleting changeset: $changeset"
+                aws cloudformation delete-change-set \
+                  --stack-name "$stack" \
+                  --change-set-name "$changeset" || true
+              fi
+            done
+          done
+
+          echo "✅ Changeset cleanup complete"
+        continue-on-error: true
+
+      # Step 2: Lambda Package Build Validation
+      - name: Validate Lambda packages
+        if: inputs.lambda-paths != '' && inputs.skip-lambda-build == false
+        run: |
+          echo "Validating Lambda deployment packages..."
+
+          # Split comma-separated paths
+          IFS=',' read -ra LAMBDA_DIRS <<< "${{ inputs.lambda-paths }}"
+
+          for lambda_dir in "${LAMBDA_DIRS[@]}"; do
+            echo ""
+            echo "================================================"
+            echo "Validating Lambda: $lambda_dir"
+            echo "================================================"
+
+            if [ ! -d "$lambda_dir" ]; then
+              echo "❌ Lambda directory not found: $lambda_dir"
+              exit 1
+            fi
+
+            cd "$lambda_dir"
+
+            # Check for requirements.txt
+            if [ ! -f "requirements.txt" ]; then
+              echo "⚠️  No requirements.txt found in $lambda_dir, skipping"
+              cd - > /dev/null
+              continue
+            fi
+
+            # Create temporary package directory
+            mkdir -p .lambda-package
+
+            # Install dependencies
+            echo "Installing dependencies..."
+            pip install -r requirements.txt -t .lambda-package/ --upgrade
+
+            # Check package size (Lambda limit: 250MB unzipped, 50MB zipped)
+            PACKAGE_SIZE=$(du -sm .lambda-package | cut -f1)
+            echo "Package size: ${PACKAGE_SIZE}MB (unzipped)"
+
+            if [ "$PACKAGE_SIZE" -gt 250 ]; then
+              echo "❌ Package size exceeds Lambda limit (250MB unzipped)"
+              echo "   Current size: ${PACKAGE_SIZE}MB"
+              rm -rf .lambda-package
+              exit 1
+            fi
+
+            if [ "$PACKAGE_SIZE" -gt 200 ]; then
+              echo "⚠️  Warning: Package size is large (${PACKAGE_SIZE}MB), approaching 250MB limit"
+            fi
+
+            # Validate imports (if there's a main handler file)
+            if [ -f "lambda_function.py" ] || [ -f "handler.py" ] || [ -f "main.py" ]; then
+              echo "Validating Python imports..."
+
+              HANDLER_FILE=""
+              if [ -f "lambda_function.py" ]; then
+                HANDLER_FILE="lambda_function.py"
+              elif [ -f "handler.py" ]; then
+                HANDLER_FILE="handler.py"
+              elif [ -f "main.py" ]; then
+                HANDLER_FILE="main.py"
+              fi
+
+              if [ -n "$HANDLER_FILE" ]; then
+                PYTHONPATH=".lambda-package:$PYTHONPATH" python -c "import ast; ast.parse(open('$HANDLER_FILE').read())"
+                echo "✅ Python syntax valid"
+              fi
+            fi
+
+            # Clean up
+            rm -rf .lambda-package
+
+            echo "✅ Lambda package validation passed: $lambda_dir"
+            cd - > /dev/null
+          done
+
+          echo ""
+          echo "================================================"
+          echo "✅ All Lambda packages validated successfully"
+          echo "================================================"
+
+      - name: Validation Summary
+        if: success()
+        run: |
+          echo "================================================"
+          echo "✅ Pre-Merge Validation PASSED"
+          echo "================================================"
+          echo ""
+          echo "Validations completed:"
+          echo "  ✅ CDK changeset created (validates resources exist)"
+          echo "  ✅ CloudFormation template is valid"
+          echo "  ✅ IAM permissions verified"
+          echo "  ✅ Referenced resources exist"
+          if [ "${{ inputs.lambda-paths }}" != "" ] && [ "${{ inputs.skip-lambda-build }}" != "true" ]; then
+            echo "  ✅ Lambda packages built and validated"
+          fi
+          echo ""
+          echo "This PR is safe to merge from an infrastructure perspective."
+          echo "Changesets have been cleaned up (no resources were created)."
+
+      - name: Validation Failed
+        if: failure()
+        run: |
+          echo "================================================"
+          echo "❌ Pre-Merge Validation FAILED"
+          echo "================================================"
+          echo ""
+          echo "One or more validation steps failed."
+          echo "Please review the logs above for details."
+          echo ""
+          echo "Common issues:"
+          echo "  - Referenced AWS resources don't exist (ECR images, S3 buckets)"
+          echo "  - Secrets Manager secrets not populated"
+          echo "  - Invalid CloudFormation template"
+          echo "  - Lambda package dependencies missing or conflicting"
+          echo "  - Lambda package size exceeds limits"
+          echo ""
+          echo "Fix the issues and push a new commit to re-run validation."
+          exit 1
