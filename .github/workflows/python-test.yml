@@ -51,6 +51,9 @@ on:
       TRACELLS_SKIP_DB_INIT:
         description: 'Skip database initialization for tests'
         required: false
+      CI_ACCESS_TO_TDB_TOKEN:
+        description: 'GitHub PAT for CI access to tracells-db private repo'
+        required: false
 
 jobs:
   test:
@@ -69,6 +72,8 @@ jobs:
           python-version: ${{ inputs.python-version }}
 
       - name: Install dependencies
+        env:
+          GITHUB_TOKEN: ${{ secrets.CI_ACCESS_TO_TDB_TOKEN || github.token }}
         run: |
           python -m pip install --upgrade pip
           pip install pytest pytest-cov ${{ inputs.extra-pytest-packages }}
