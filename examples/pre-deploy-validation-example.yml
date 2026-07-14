@@ -22,7 +22,7 @@ jobs:
     name: Validate Infrastructure
     uses: Tracells/github-workflows/.github/workflows/pre-deploy-validation.yml@main
     with:
-      node-version: '20'
+      node-version: '24'
       python-version: '3.12'
       aws-region: us-east-2
       infra-path: infra
