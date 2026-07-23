@@ -81,23 +81,50 @@ export async function postReviewComment({ body, prNumber }) {
     comment.body.includes('🤖 AI Senior Review')
   );
 
+  let editNumber = 1;
+
   if (existingReview) {
+    // Extract edit number from existing comment
+    const editMatch = existingReview.body.match(/Edit #(\d+)/);
+    if (editMatch) {
+      editNumber = parseInt(editMatch[1]) + 1;
+    }
+
     // Update existing comment
     await octokit.issues.updateComment({
       owner,
       repo,
       comment_id: existingReview.id,
-      body
+      body: addMetadataToComment(body, editNumber)
     });
-    console.log('Updated existing review comment');
+    console.log(`Updated existing review comment (edit #${editNumber})`);
   } else {
     // Create new comment
     await octokit.issues.createComment({
       owner,
       repo,
       issue_number: prNumber,
-      body
+      body: addMetadataToComment(body, editNumber)
     });
-    console.log('Posted new review comment');
+    console.log('Posted new review comment (edit #1)');
   }
+}
+
+function addMetadataToComment(body, editNumber) {
+  const now = new Date();
+  const hours = String(now.getUTCHours()).padStart(2, '0');
+  const minutes = String(now.getUTCMinutes()).padStart(2, '0');
+  const timestamp = `${hours}:${minutes} UTC`;
+
+  // Add metadata to the footer
+  const footerIndex = body.lastIndexOf('---');
+  if (footerIndex !== -1) {
+    const beforeFooter = body.substring(0, footerIndex);
+    const footer = body.substring(footerIndex);
+
+    return `${beforeFooter}${footer}\n_Posted at ${timestamp} • Edit #${editNumber}_`;
+  }
+
+  // Fallback if no footer found
+  return `${body}\n\n_Posted at ${timestamp} • Edit #${editNumber}_`;
 }
