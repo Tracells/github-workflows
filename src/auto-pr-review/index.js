@@ -4,6 +4,7 @@ import { loadConfig } from './config.js';
 import { fetchPRContext } from './github.js';
 import { runReviewers } from './reviewers/index.js';
 import { postReviewComment } from './github.js';
+import { clusterFindings, deduplicateLocations } from './reviewers/cluster.js';
 
 async function main() {
   console.log('Starting PR review process...');
@@ -31,9 +32,13 @@ async function main() {
   const reviews = await runReviewers(prContext, config);
   console.log('Reviews completed:', reviews.length, 'findings');
 
+  // Cluster similar findings together
+  const clusteredReviews = clusterFindings(reviews).map(deduplicateLocations);
+  console.log('After clustering:', clusteredReviews.length, 'unique findings');
+
   // Post aggregated review comment
   await postReviewComment({
-    body: formatReviewComment(reviews, config),
+    body: formatReviewComment(clusteredReviews, config),
     prNumber: prContext.number
   });
 
@@ -70,9 +75,24 @@ function formatReviewComment(reviews, config) {
       findings.forEach(finding => {
         const emoji = finding.severity === 'high' ? '🔴' : finding.severity === 'medium' ? '🟡' : '🔵';
         sections.push(`${emoji} **${finding.severity.toUpperCase()}**: ${finding.message}\n`);
-        if (finding.file) {
+
+        // Handle multiple locations (clustered findings)
+        if (finding.locations && finding.locations.length > 0) {
+          if (finding.locations.length === 1) {
+            const loc = finding.locations[0];
+            sections.push(`   📄 \`${loc.file}\`${loc.line ? `:${loc.line}` : ''}\n`);
+          } else {
+            // Multiple locations - list them all
+            sections.push(`   📄 Found in ${finding.locations.length} locations:\n`);
+            finding.locations.forEach(loc => {
+              sections.push(`      - \`${loc.file}\`${loc.line ? `:${loc.line}` : ''}\n`);
+            });
+          }
+        } else if (finding.file) {
+          // Fallback for old format (single file/line)
           sections.push(`   📄 \`${finding.file}\`${finding.line ? `:${finding.line}` : ''}\n`);
         }
+
         if (finding.suggestion) {
           sections.push(`   💡 ${finding.suggestion}\n`);
         }
