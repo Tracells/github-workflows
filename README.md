@@ -1,18 +1,135 @@
 # Reusable GitHub Actions Workflows
 
-This repository contains centralized, reusable GitHub Actions workflows used across multiple repositories.
+This repository contains centralized, reusable GitHub Actions workflows used across multiple Tracells repositories.
 
 ## Available Workflows
+
+### Python Test Workflow
+
+**File:** `.github/workflows/python-test.yml`
+
+Runs Python tests with pytest and coverage reporting.
+
+**Usage:**
+
+```yaml
+name: Run Tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    uses: Tracells/github-workflows/.github/workflows/python-test.yml@main
+    with:
+      python-version: '3.11'
+      coverage-package: 'your_package_name'
+      install-editable: false
+      skip-tracells-db: false
+      concurrency-enabled: true
+```
+
+**Inputs:**
+
+- `python-version` (optional, default: `3.11`): Python version to use
+- `test-path` (optional, default: `tests/`): Path to tests directory
+- `coverage-package` (required): Package name for coverage reporting (supports comma-separated names for multi-package coverage, e.g. `'pkg1,pkg2'`)
+- `extra-pytest-packages` (optional): Extra pytest packages to install (e.g., `'pytest-mock pytest-xdist'`)
+- `coverage-formats` (optional, default: `term-missing html`): Coverage report formats (e.g., `'term-missing html json'`)
+- `install-editable` (optional, default: `false`): Install package in editable mode (`pip install -e .`)
+- `skip-tracells-db` (optional, default: `false`): Skip tracells-db dependency
+- `extra-install-commands` (optional): Extra commands to run during installation
+- `concurrency-enabled` (optional, default: `true`): Enable concurrency cancellation
+
+**Secrets:**
+
+- `TRACELLS_SKIP_DB_INIT` (optional): Skip database initialization for tests
+- `CI_ACCESS_TO_TDB_TOKEN` (optional): GitHub PAT for CI access to the private tracells-db repo
+
+### CDK Deploy Workflow
+
+**File:** `.github/workflows/cdk-deploy.yml`
+
+Deploys AWS CDK infrastructure with support for both OIDC and access key authentication.
+
+**Usage (OIDC authentication):**
+
+```yaml
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write  # Required for OIDC authentication
+
+jobs:
+  test:
+    name: Run Tests
+    uses: Tracells/github-workflows/.github/workflows/python-test.yml@main
+    with:
+      python-version: '3.11'
+      coverage-package: 'your_package'
+
+  deploy:
+    needs: test
+    uses: Tracells/github-workflows/.github/workflows/cdk-deploy.yml@main
+    with:
+      use-oidc: true
+      aws-region: 'us-east-2'
+      infra-path: 'infra'
+    secrets:
+      AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+```
+
+**Usage (Access keys):**
+
+```yaml
+jobs:
+  deploy:
+    needs: test
+    uses: Tracells/github-workflows/.github/workflows/cdk-deploy.yml@main
+    with:
+      use-oidc: false
+      stack-name: 'YourStackName'
+      install-global-cdk: true
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+```
+
+**Inputs:**
+
+- `node-version` (optional, default: `'24'`): Node.js version
+- `python-version` (optional, default: `'3.11'`): Python version
+- `aws-region` (optional, default: `'us-east-2'`): AWS region
+- `infra-path` (optional, default: `'infra'`): Path to CDK infrastructure directory
+- `stack-name` (optional): CDK stack name (leave empty to deploy all stacks)
+- `use-oidc` (optional, default: `false`): Use OIDC authentication vs access keys
+- `install-global-cdk` (optional, default: `false`): Install AWS CDK CLI globally
+
+**Secrets:**
+
+- `AWS_ACCESS_KEY_ID` (required if `use-oidc: false`)
+- `AWS_SECRET_ACCESS_KEY` (required if `use-oidc: false`)
+- `AWS_DEPLOY_ROLE_ARN` (required if `use-oidc: true`)
+- Environment secrets: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `REPORT_RECIPIENTS`, `SES_FROM_EMAIL` (all optional)
 
 ### Pre-Deployment Validation Workflow
 
 **File:** `.github/workflows/pre-deploy-validation.yml`
 
-**NEW** - Validates CDK deployments and Lambda packages **before deploying** to catch deployment failures early.
+Validates CDK deployments and Lambda packages **before deploying** to catch deployment failures early.
 
 **What it validates:**
-- ✅ CDK changeset validation (validates resources exist, IAM permissions, template syntax)
-- ✅ Lambda package build (dependencies, package size, imports)
+- CDK changeset validation (validates resources exist, IAM permissions, template syntax)
+- Lambda package build (dependencies, package size, imports)
 - **Zero infrastructure cost** - uses changesets without executing
 
 **Usage:**
@@ -44,53 +161,14 @@ jobs:
 ```
 
 **Inputs:**
-- `node-version`, `python-version`, `aws-region`, `infra-path`, `stack-name` - Same as `cdk-deploy.yml`
+- `node-version` (optional, default: `'22'`): Node.js version
+- `python-version` (optional, default: `'3.11'`): Python version
+- `aws-region` (optional, default: `'us-east-2'`): AWS region
+- `infra-path` (optional, default: `'infra'`): Path to CDK infrastructure directory
+- `stack-name` (optional): CDK stack name (leave empty to validate all stacks)
 - `lambda-paths` (optional): Comma-separated paths to Lambda directories (e.g., `'src/lambda1,src/lambda2'`)
 - `skip-lambda-build` (optional, default: `false`): Skip Lambda validation
 - `use-oidc` (optional, default: `false`): Use OIDC authentication
-
-**See:** [docs/pre-deploy-validation.md](docs/pre-deploy-validation.md) for full documentation
-
-### Python Test Workflow
-
-**File:** `.github/workflows/python-test.yml`
-
-Runs Python tests with pytest and coverage reporting.
-
-**Usage:**
-
-```yaml
-name: Run Tests
-
-on:
-  push:
-    branches: ['**']
-  pull_request:
-
-jobs:
-  test:
-    uses: <your-org>/github-workflows/.github/workflows/python-test.yml@main
-    with:
-      python-version: '3.11'
-      coverage-package: 'your_package_name'
-      install-editable: false
-      skip-tracells-db: false
-      concurrency-enabled: true
-```
-
-**Inputs:**
-
-- `python-version` (optional, default: `3.11`): Python version to use
-- `test-path` (optional, default: `tests/`): Path to tests directory
-- `coverage-package` (required): Package name for coverage reporting
-- `install-editable` (optional, default: `false`): Install package in editable mode
-- `skip-tracells-db` (optional, default: `false`): Skip tracells-db dependency
-- `extra-install-commands` (optional): Extra commands to run during installation
-- `concurrency-enabled` (optional, default: `true`): Enable concurrency cancellation
-
-**Secrets:**
-
-- `TRACELLS_SKIP_DB_INIT` (optional): Skip database initialization for tests
 
 ### PR Review Workflow
 
@@ -100,6 +178,8 @@ Runs AI-powered PR review using AWS Bedrock with multiple specialized senior eng
 - **Architecture Reviewer** - System design, module boundaries, API design, maintainability
 - **Reliability Reviewer** - Correctness, edge cases, error handling, observability
 - **Security Reviewer** - Auth/authz, secrets, input validation, data leakage
+
+Findings are deduplicated, clustered by similarity, and filtered through a quality gate that keeps only bugs, security issues, performance problems, and critical architectural issues.
 
 **Usage:**
 
@@ -118,7 +198,7 @@ permissions:
 jobs:
   review:
     if: github.event.pull_request.head.repo.full_name == github.repository && !github.event.pull_request.draft
-    uses: Tracells/github-workflows/.github/workflows/pr-review.yml@v1
+    uses: Tracells/github-workflows/.github/workflows/pr-review.yml@main
     secrets:
       AWS_ROLE_ARN: ${{ secrets.AWS_PR_REVIEW_ROLE_ARN }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -150,84 +230,18 @@ max_pr_size: 50
 
 **Secrets:**
 
-- `AWS_ROLE_ARN` (required): AWS IAM role ARN for Bedrock access
+- `AWS_ROLE_ARN` (required): AWS IAM role ARN for Bedrock access (OIDC)
 - `AWS_REGION` (optional, default: `us-east-1`): AWS region
 
-### CDK Deploy Workflow
+## Consuming Repositories
 
-**File:** `.github/workflows/cdk-deploy.yml`
+The following repositories use workflows from this repo (tracked in `REPOS.yml`):
 
-Deploys AWS CDK infrastructure with support for both OIDC and access key authentication.
-
-**Usage (OIDC authentication):**
-
-```yaml
-name: Deploy to AWS
-
-on:
-  push:
-    branches: [main]
-
-permissions:
-  contents: read
-  id-token: write  # Required for OIDC authentication
-
-jobs:
-  test:
-    name: Run Tests
-    uses: Tracells/github-workflows/.github/workflows/python-test.yml@v1.0.0
-    with:
-      python-version: '3.11'
-      coverage-package: 'your_package'
-
-  deploy:
-    needs: test
-    uses: Tracells/github-workflows/.github/workflows/cdk-deploy.yml@v1
-    with:
-      use-oidc: true
-      aws-region: 'us-east-2'
-      infra-path: 'infra'
-    secrets:
-      AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-```
-
-**Usage (Access keys with environment variables):**
-
-```yaml
-permissions:
-  contents: read  # Required to checkout code
-
-jobs:
-  deploy:
-    needs: test
-    uses: Tracells/github-workflows/.github/workflows/cdk-deploy.yml@v1
-    with:
-      use-oidc: false
-      stack-name: 'YourStackName'
-      install-global-cdk: true
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      DB_HOST: ${{ secrets.DB_HOST }}
-      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-```
-
-**Inputs:**
-
-- `node-version` (optional, default: `'20'`): Node.js version
-- `python-version` (optional, default: `'3.11'`): Python version
-- `aws-region` (optional, default: `'us-east-2'`): AWS region
-- `infra-path` (optional, default: `'infra'`): Path to CDK infrastructure directory
-- `stack-name` (optional): CDK stack name (leave empty to deploy all stacks)
-- `use-oidc` (optional, default: `false`): Use OIDC authentication vs access keys
-- `install-global-cdk` (optional, default: `false`): Install AWS CDK CLI globally
-
-**Secrets:**
-
-- `AWS_ACCESS_KEY_ID` (required if `use-oidc: false`)
-- `AWS_SECRET_ACCESS_KEY` (required if `use-oidc: false`)
-- `AWS_DEPLOY_ROLE_ARN` (required if `use-oidc: true`)
-- Environment secrets: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `REPORT_RECIPIENTS`, `SES_FROM_EMAIL` (all optional)
+- ai-tools-infra
+- labguru-delivery-validation
+- pipeline-automations
+- tracells-db
+- redcap
 
 ## Using Test Workflow in Deployment Pipelines
 
@@ -243,7 +257,7 @@ on:
 jobs:
   test:
     name: Run Tests
-    uses: Tracells/github-workflows/.github/workflows/python-test.yml@v1.0.0
+    uses: Tracells/github-workflows/.github/workflows/python-test.yml@main
     with:
       python-version: '3.11'
       coverage-package: 'your_package'
@@ -252,7 +266,6 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      # Your deployment steps here
       - name: Deploy
         run: echo "Deploy after tests pass"
 ```
@@ -262,75 +275,13 @@ This pattern:
 - Ensures consistent testing across workflows
 - Updates automatically when the centralized workflow is updated
 
-## Setup Instructions
+## Example Configurations
 
-1. **Create this repository** on GitHub (e.g., `Tracells/github-workflows` or `your-org/github-workflows`)
-2. **Push this code** to the repository
-3. **Update consuming repositories** to reference these workflows (see examples below)
-
-## Example Conversions
-
-### Email Processing
-
-```yaml
-# .github/workflows/test.yml
-name: Run Tests
-
-on:
-  push:
-    branches: ['**', '!main']
-
-jobs:
-  test:
-    uses: Tracells/github-workflows/.github/workflows/python-test.yml@main
-    with:
-      python-version: '3.11'
-      coverage-package: 'email_parser'
-      concurrency-enabled: true
-```
-
-### RedCAP
-
-```yaml
-# .github/workflows/test.yml
-name: Run Tests
-
-on:
-  push:
-    branches: ['**']
-  pull_request:
-    branches: [main]
-
-jobs:
-  test:
-    uses: Tracells/github-workflows/.github/workflows/python-test.yml@main
-    with:
-      python-version: '3.11'
-      coverage-package: 'redcap'
-      skip-tracells-db: true
-```
-
-### Tracells DB
-
-```yaml
-# .github/workflows/test.yml
-name: Run Tests
-
-on:
-  push:
-    branches: ['**']
-
-jobs:
-  test:
-    uses: Tracells/github-workflows/.github/workflows/python-test.yml@main
-    with:
-      python-version: '3.11'
-      coverage-package: 'src.db'
-      install-editable: true
-      concurrency-enabled: true
-    secrets:
-      TRACELLS_SKIP_DB_INIT: '1'
-```
+The `examples/` directory contains ready-to-use workflow configurations for specific repos:
+- `email-processing-test.yml` - Email processing service
+- `redcap-test.yml` - RedCAP sync
+- `tracells-db-test.yml` - Tracells DB
+- `pre-deploy-validation-example.yml` - Pre-deployment validation
 
 ## Versioning
 
