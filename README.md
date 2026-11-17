@@ -46,7 +46,8 @@ jobs:
 **Secrets:**
 
 - `TRACELLS_SKIP_DB_INIT` (optional): Skip database initialization for tests
-- `CI_ACCESS_TO_TDB_TOKEN` (optional): GitHub PAT for CI access to the private tracells-db repo
+- `GH_APP_ID` (recommended): GitHub App ID for cross-repo access (see [Cross-Repo Authentication](#cross-repo-authentication))
+- `GH_APP_PRIVATE_KEY` (recommended): GitHub App private key for cross-repo access
 
 ### CDK Deploy Workflow
 
@@ -233,15 +234,66 @@ max_pr_size: 50
 - `AWS_ROLE_ARN` (required): AWS IAM role ARN for Bedrock access (OIDC)
 - `AWS_REGION` (optional, default: `us-east-1`): AWS region
 
+## Cross-Repo Authentication
+
+Workflows that need to clone private Tracells repos (e.g. `tracells-db`, `email-service`, `redcap`) use a **GitHub App** for authentication. This is org-owned and not tied to any individual's account, so it survives personnel changes.
+
+### How it works
+
+1. A GitHub App called **tracells-ci-cross-repo** is installed on the Tracells org (all repos)
+2. Each repo stores the App's credentials as repo-level secrets: `GH_APP_ID` and `GH_APP_PRIVATE_KEY`
+3. Workflows use [`actions/create-github-app-token@v1`](https://github.com/actions/create-github-app-token) to mint a short-lived token at runtime
+4. The token is used for `actions/checkout` of private repos or as `GITHUB_TOKEN` for `pip install git+https://...`
+
+### Adding a new repo
+
+To give a new repo cross-repo access:
+
+1. Set the secrets (get values from an org admin or another repo's settings):
+   ```
+   gh secret set GH_APP_ID --repo Tracells/<repo-name>
+   gh secret set GH_APP_PRIVATE_KEY --repo Tracells/<repo-name> < path/to/private-key.pem
+   ```
+2. In the repo's test workflow, forward the secrets to the shared workflow:
+   ```yaml
+   secrets:
+     GH_APP_ID: ${{ secrets.GH_APP_ID }}
+     GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+   ```
+3. In deploy workflows, add a token generation step before any cross-repo checkout:
+   ```yaml
+   - name: Generate GitHub App token
+     id: app-token
+     uses: actions/create-github-app-token@v1
+     with:
+       app-id: ${{ secrets.GH_APP_ID }}
+       private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+       owner: Tracells
+
+   - name: Checkout private-repo
+     uses: actions/checkout@v5
+     with:
+       repository: Tracells/private-repo
+       token: ${{ steps.app-token.outputs.token }}
+   ```
+
+### Maintenance
+
+- The App's private key (`.pem`) does **not** expire — it's valid as long as the App exists
+- Installation tokens generated during workflow runs expire after 1 hour (handled automatically)
+- To rotate the key: generate a new one in the App settings, then update `GH_APP_PRIVATE_KEY` on each repo
+- The App lives at: https://github.com/organizations/Tracells/settings/apps/tracells-ci-cross-repo
+
 ## Consuming Repositories
 
 The following repositories use workflows from this repo (tracked in `REPOS.yml`):
 
 - ai-tools-infra
 - labguru-delivery-validation
+- nf-rnaseq-pipeline
 - pipeline-automations
-- tracells-db
 - redcap
+- tracells-db
 
 ## Using Test Workflow in Deployment Pipelines
 
